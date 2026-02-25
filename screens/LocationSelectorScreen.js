@@ -566,6 +566,9 @@ const LocationSelectorScreen = () => {
 
   const [routeCoordinates, setRouteCoordinates] = useState([]);
 
+  const [searchLoading, setSearchLoading] = useState(false);
+
+
   const mapRef = useRef(null);
 
   // Memoize totalStops to prevent unnecessary recalculations on every render
@@ -891,6 +894,37 @@ const LocationSelectorScreen = () => {
     }
   };
 
+  const fetchPlaceSuggestions = async (text) => {
+    if (!text || text.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    try {
+      setSearchLoading(true);
+
+      const url =
+        `https://maps.googleapis.com/maps/api/place/autocomplete/json?` +
+        `input=${encodeURIComponent(text)}` +
+        `&key=${GOOGLE_API_KEY}&components=country:in`;
+
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data.predictions) {
+        setSuggestions(data.predictions);
+      } else {
+        setSuggestions([]);
+      }
+    } catch (e) {
+      console.log("Autocomplete error:", e);
+      setSuggestions([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+
   // ---------- Stop Handlers (Porter Style) ----------
   const handleStopChange = (index, value) => {
     const newStops = [...stops];
@@ -898,6 +932,7 @@ const LocationSelectorScreen = () => {
     setStops(newStops);
     setActiveInput(`stop-${index}`);
     fetchSuggestions(value);
+    fetchPlaceSuggestions(value);
   };
 
   const handleStopSelect = async (index, item) => {
@@ -1182,6 +1217,38 @@ const LocationSelectorScreen = () => {
   useEffect(() => {
     updateRoutePolyline();
   }, [location, currentLocation, stopsDetails]);
+
+  const selectSuggestion = async (item) => {
+    try {
+      const detailsUrl =
+        `https://maps.googleapis.com/maps/api/place/details/json?` +
+        `place_id=${item.place_id}&fields=geometry,formatted_address,name` +
+        `&key=${GOOGLE_API_KEY}`;
+
+      const res = await fetch(detailsUrl);
+      const data = await res.json();
+
+      if (!data.result) return;
+
+      const geometry = data.result.geometry;
+
+      const index = parseInt(activeInput.split("-")[1]);
+
+      const newStops = [...stops];
+      newStops[index] = data.result.formatted_address;
+      setStops(newStops);
+
+      const newDetails = [...stopsDetails];
+      newDetails[index] = { geometry };
+      setStopsDetails(newDetails);
+
+      setSuggestions([]);
+    } catch (e) {
+      console.log("Place details error:", e);
+    }
+  };
+
+
 
 
   // ensure the scheduler can call the latest implementation
@@ -2399,6 +2466,20 @@ const LocationSelectorScreen = () => {
                             onChangeText={(val) => handleStopChange(idx, val)}
                             onFocus={() => setActiveInput(`stop-${idx}`)}
                           />
+                          {/* {activeInput === `stop-${idx}` && suggestions.length > 0 && (
+                            <View style={styles.suggestionBox}>
+                              {suggestions.map((item) => (
+                                <TouchableOpacity
+                                  key={item.place_id}
+                                  style={styles.suggestionItem}
+                                  onPress={() => selectSuggestion(item)}
+                                >
+                                  <Text>{item.description}</Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          )} */}
+
                         </View>
                       )}
                     </View>
@@ -2492,11 +2573,7 @@ const LocationSelectorScreen = () => {
           </View>
 
           {/* Buttons: Select on Map & Saved Address - Show only when input is focused and empty */}
-          {activeInput && activeInput.startsWith('stop-') && (() => {
-            const idx = parseInt(activeInput.replace('stop-', ''), 10);
-            const hasLocation = stops[idx] && stopsDetails[idx]?.receiverInfo;
-            return !hasLocation;
-          })() && (
+         
               <View style={styles.topButtonRow}>
                 <TouchableOpacity
                   style={styles.topButton}
@@ -2514,28 +2591,15 @@ const LocationSelectorScreen = () => {
                   />
                   <Text style={styles.topButtonText}>Select on Map</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.topButton}
-                  onPress={() => {
-                    const idx = parseInt(activeInput.replace('stop-', ''), 10);
-                    if (!isNaN(idx)) {
-                      setActiveStopIndex(idx);
-                      setShowSavedModal(true);
-                    }
-                  }}
-                >
-                  <Ionicons name="bookmark" size={18} color="#EC4D4A" />
-                  <Text style={styles.topButtonText}>Saved Address</Text>
-                </TouchableOpacity>
               </View>
-            )}
+            
 
           {/* Map with Polyline */}
           <View style={styles.mapCard}>
             <MapView
               ref={mapRef}
               provider={PROVIDER_GOOGLE}
-              style={styles.map}
+              style={styles.mapStyle}
               initialRegion={getInitialRegion()}
               showsUserLocation
             >
@@ -2664,7 +2728,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
     paddingBottom: 90, // Add padding for fixed button
   },
-  map: { width: "100%", height: 220 },
+  mapStyle: { width: "100%", height: "100%" },
   card: {
     backgroundColor: "#fff",
     margin: 16,
@@ -2679,6 +2743,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     elevation: 3,
     overflow: "hidden",
+    flex: 1,
   },
   locationRow: {
     flexDirection: "row",
@@ -2874,6 +2939,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     marginTop: 16,
   },
+  suggestionBox: {
+  backgroundColor: "#fff",
+  borderRadius: 8,
+  elevation: 5,
+  marginTop: 5,
+  paddingVertical: 5,
+},
 });
 
 export default LocationSelectorScreen;

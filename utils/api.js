@@ -1,10 +1,10 @@
 // Production URL
-// export const BASE_URL = "https://firstapp.ridodrop.com";
+export const BASE_URL = "https://firstapp.ridodrop.com";
 
 // Local development URL for iOS Simulator (127.0.0.1 instead of localhost)
 // export const BASE_URL = "http://127.0.0.1:3001";
 
-export const BASE_URL = "http://192.168.1.2:3000";
+// export const BASE_URL = "http://192.168.1.2:3000";
 
 
 // Alternative: localhost

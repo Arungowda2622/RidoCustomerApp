@@ -48,32 +48,57 @@ const HomeScreen = () => {
         const locationTimeout = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Location timeout')), 10000)
         );
-        
+
         const locationPromise = getCurrentLocation();
-        
+
         const loc = await Promise.race([locationPromise, locationTimeout]);
         setCurrentLocation(loc.coords); // Store the coordinates
-        
+
         // Reverse geocode to get address with timeout
         try {
           const geocodeTimeout = new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Geocoding timeout')), 8000)
           );
-          
+
           const geocodePromise = Location.reverseGeocodeAsync({
             latitude: loc.coords.latitude,
             longitude: loc.coords.longitude,
           });
-          
+
           const [address] = await Promise.race([geocodePromise, geocodeTimeout]);
-          
+
           if (address && (address.name || address.street || address.city)) {
             // Build address parts array and filter out empty values
             const parts = [];
-            if (address.name) parts.push(address.name);
-            if (address.street) parts.push(address.street);
-            if (address.city) parts.push(address.city);
-            const formatted = parts.join(', ');
+
+            // Area / locality (main thing Porter shows)
+            if (address.district) parts.push(address.district);
+            else if (address.subregion) parts.push(address.subregion);
+            else if (address.city) parts.push(address.city);
+
+            // State
+            if (address.region) parts.push(address.region);
+
+            // Pincode
+            if (address.postalCode) parts.push(address.postalCode);
+
+            // Country
+            if (address.country) parts.push(address.country);
+
+            const area =
+              address.district ||
+              address.city ||
+              address.subregion ||
+              address.region;
+
+            const formatted = `${area}, ${address.region || ""} ${address.postalCode || ""}, ${address.country || ""}`;
+            setCurrentAddress(formatted.replace(/\s+,/g, ","));
+
+            if (formatted) {
+              setCurrentAddress(formatted);
+            } else {
+              setCurrentAddress("Location selected");
+            }
             if (formatted) {
               setCurrentAddress(formatted);
             } else {
@@ -89,13 +114,13 @@ const HomeScreen = () => {
             const googleTimeout = new Promise((_, reject) =>
               setTimeout(() => reject(new Error('Google API timeout')), 8000)
             );
-            
+
             const googlePromise = axios.get(
               `https://maps.googleapis.com/maps/api/geocode/json?latlng=${loc.coords.latitude},${loc.coords.longitude}&key=${GOOGLE_API_KEY}`
             );
-            
+
             const response = await Promise.race([googlePromise, googleTimeout]);
-            
+
             if (response.data.results && response.data.results.length > 0) {
               setCurrentAddress(response.data.results[0].formatted_address);
             } else {
@@ -112,16 +137,16 @@ const HomeScreen = () => {
         setCurrentLocation(null);
         setCurrentAddress("Location unavailable");
       }
-      
+
       // Load user data from AsyncStorage with timeout
       try {
         const storageTimeout = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('AsyncStorage timeout')), 5000)
         );
-        
+
         const userDataPromise = AsyncStorage.getItem("userData");  // Fixed: use "userData" key
         const userData = await Promise.race([userDataPromise, storageTimeout]);
-        
+
         if (userData) {
           setUser(JSON.parse(userData));
         } else {
@@ -138,47 +163,47 @@ const HomeScreen = () => {
   const fetchActiveBooking = async () => {
     try {
       console.log("🔍 Fetching active bookings...");
-      
+
       // Add timeout for AsyncStorage operations
       const storageTimeout = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Storage timeout')), 5000)
       );
-      
+
       const userDataPromise = AsyncStorage.getItem("userData");  // Fixed: use "userData" key
       const tokenPromise = AsyncStorage.getItem("token");
       const userIdPromise = AsyncStorage.getItem("userId");
-      
+
       const [userData, token, userId] = await Promise.race([
         Promise.all([userDataPromise, tokenPromise, userIdPromise]),
         storageTimeout
       ]);
-      
+
       console.log("📱 Storage data:", {
         hasUserData: !!userData,
         hasToken: !!token,
         hasUserId: !!userId
       });
-      
+
       if ((userData && token) || (token && userId)) {
         const parsedUser = userData ? JSON.parse(userData) : null;
         const userIdToUse = parsedUser?._id || userId;
-        
+
         console.log("👤 Using userId:", userIdToUse);
-        
+
         // Add timeout for API call
         const apiTimeout = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('API timeout')), 10000)
         );
-        
+
         const apiPromise = getUserBookings(userIdToUse, token);
         const response = await Promise.race([apiPromise, apiTimeout]);
-        
+
         console.log("📋 All bookings response:", {
           success: !!response.data,
           bookingsCount: response.data?.bookings?.length || 0,
           bookings: response.data?.bookings || []
         });
-        
+
         if (response.data && response.data.bookings) {
           // Log all booking statuses for debugging
           response.data.bookings.forEach((booking, index) => {
@@ -188,7 +213,7 @@ const HomeScreen = () => {
               bookingId: booking.bookingId
             });
           });
-          
+
           // Find active booking (ongoing orders)
           const activeOrder = response.data.bookings.find(booking => {
             const status = booking.status?.toLowerCase();
@@ -196,7 +221,7 @@ const HomeScreen = () => {
             console.log(`🔄 Checking booking ${booking._id}: status="${status}", isActive=${isActive}`);
             return isActive;
           });
-          
+
           if (activeOrder) {
             console.log("✅ Found active booking:", activeOrder);
             setActiveBooking(activeOrder);
@@ -232,23 +257,23 @@ const HomeScreen = () => {
   // Handle active booking banner press
   const handleActiveBookingPress = () => {
     if (!activeBooking) return;
-    
+
     const status = activeBooking.status?.toLowerCase();
     const isAcceptedByRider = ["accepted", "driver_assigned", "in_progress", "picked_up"].includes(status);
-    
+
     if (isAcceptedByRider) {
       // Navigate to booking details screen when rider has accepted
-      navigation.navigate("BookingDetail", { 
+      navigation.navigate("BookingDetail", {
         bookingId: activeBooking._id || activeBooking.id,
         booking: activeBooking,
-        fromHomeScreen: true 
+        fromHomeScreen: true
       });
     } else if (["pending", "confirmed"].includes(status)) {
       // Navigate to searching screen when still looking for rider
-      navigation.navigate("WaitingDriver", { 
+      navigation.navigate("WaitingDriver", {
         bookingData: activeBooking,
         bookingId: activeBooking._id || activeBooking.id,
-        fromHomeScreen: true 
+        fromHomeScreen: true
       });
     }
   };
@@ -256,9 +281,9 @@ const HomeScreen = () => {
   // Get status display text and color
   const getBookingStatusInfo = () => {
     if (!activeBooking) return null;
-    
+
     const status = activeBooking.status?.toLowerCase();
-    
+
     switch (status) {
       case "pending":
       case "confirmed":
@@ -342,12 +367,12 @@ const HomeScreen = () => {
       */
       return null;
     }
-    
+
     const statusInfo = getBookingStatusInfo();
     if (!statusInfo) return null;
-    
+
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.activeBookingBanner}
         onPress={handleActiveBookingPress}
         activeOpacity={0.9}
@@ -426,11 +451,11 @@ const HomeScreen = () => {
     if (!available) return;
 
     setSelectedCard(title);
-    
+
     // Map display names to backend category codes
     const categoryMapping = {
       "2 Wheeler": "2W",
-      "3 Wheeler": "3W", 
+      "3 Wheeler": "3W",
       "Truck": "TRUCK",
       "E-loader": "E-LOADER"
     };
@@ -439,11 +464,11 @@ const HomeScreen = () => {
     console.log(`🚗 Selected category: ${title} → ${categoryCode}`);
 
     if (categoryCode) {
-      navigation.navigate("LocationSelectorScreen", { 
+      navigation.navigate("LocationSelectorScreen", {
         vehicleType: categoryCode,
         categoryName: title,
         currentLocation,
-        currentAddress 
+        currentAddress
       });
     } else {
       console.warn("Unknown vehicle category:", title);
@@ -620,14 +645,14 @@ const HomeScreen = () => {
 
         {/* Image Section - starts immediately below vehicle cards */}
         <View style={styles.imageContainer}>
-          <Image 
-            source={require("../assets/image copy 2.png")} 
+          <Image
+            source={require("../assets/image copy 2.png")}
             style={styles.bottomImage}
             resizeMode="cover"
           />
         </View>
       </ScrollView>
-      
+
       {/* Active Booking Banner */}
       {renderActiveBookingBanner()}
     </View>

@@ -36,7 +36,7 @@ const { width, height } = Dimensions.get("window");
 const scale = (size) => Math.round((width / 375) * size);
 
 // Google API key for route directions
-const GOOGLE_API_KEY = "AIzaSyDboH1OPn2tZixD8iFGiH9EJPvzsd4CL2Q";
+const GOOGLE_API_KEY = "AIzaSyDwOFrgNmM51uT1F1zg_L0Em5ujW9obcHk";
 
 const BookingSearchingScreen = () => {
   const navigation = useNavigation();
@@ -45,7 +45,8 @@ const BookingSearchingScreen = () => {
 
   // Get booking data passed from BillingPayment or OnlinePayment
   const bookingData = route.params?.bookingData || {};
-  
+  const [currentQuickFee, setCurrentQuickFee] = useState(bookingData.quickFee || 0);
+
   // Debug: Log booking data structure
   console.log('🔍 BookingSearchingScreen - Full Booking Data:', JSON.stringify({
     amountPay: bookingData.amountPay,
@@ -56,20 +57,20 @@ const BookingSearchingScreen = () => {
     pricing: bookingData.pricing,
     feeBreakdown: bookingData.feeBreakdown
   }, null, 2));
-  
+
   // Normalize booking data to extract locations from different structures
   const normalizeLocations = (booking) => {
     const locations = [];
-    
+
     // Check if locations array already exists (new structure)
     if (booking.locations && Array.isArray(booking.locations) && booking.locations.length > 0) {
       console.log("✅ Using existing locations array");
       return booking.locations;
     }
-    
+
     // Otherwise, build from fromAddress, stops, and dropLocation (old structure)
     console.log("🔄 Building locations from fromAddress/dropLocation structure");
-    
+
     // Add pickup location (fromAddress)
     if (booking.fromAddress) {
       locations.push({
@@ -85,7 +86,7 @@ const BookingSearchingScreen = () => {
       });
       console.log("✅ Added pickup:", booking.fromAddress.latitude, booking.fromAddress.longitude);
     }
-    
+
     // Add intermediate stops if any
     if (booking.stops && Array.isArray(booking.stops)) {
       booking.stops.forEach((stop, index) => {
@@ -103,7 +104,7 @@ const BookingSearchingScreen = () => {
         console.log(`✅ Added stop ${index + 1}:`, stop.latitude, stop.longitude);
       });
     }
-    
+
     // Add drop locations
     if (booking.dropLocation && Array.isArray(booking.dropLocation)) {
       booking.dropLocation.forEach((drop, index) => {
@@ -122,14 +123,21 @@ const BookingSearchingScreen = () => {
         console.log(`✅ Added drop ${index + 1}:`, drop.latitude, drop.longitude);
       });
     }
-    
+
     console.log(`📍 Total locations built: ${locations.length}`);
     return locations;
   };
-  
+
   // Get normalized locations
-  const normalizedLocations = normalizeLocations(bookingData);
-  
+  const normalizedLocations = React.useMemo(
+    () => normalizeLocations(bookingData),
+    [bookingData]
+  );
+  const [liveBooking, setLiveBooking] = useState(bookingData);
+
+
+
+
   // Log booking data immediately when component mounts
   useEffect(() => {
     console.log("🔍 BookingSearchingScreen mounted with:");
@@ -157,10 +165,10 @@ const BookingSearchingScreen = () => {
       if (isRiderAccepted) {
         return; // Don't prevent navigation
       }
-      
+
       // Prevent default behavior of leaving the screen
       e.preventDefault();
-      
+
       // Show cancel modal instead
       setShowCancelModal(true);
     });
@@ -206,29 +214,29 @@ const BookingSearchingScreen = () => {
       Alert.alert("Please select a reason", "Please choose a reason for cancellation");
       return;
     }
-    
+
     if (selectedCancelReason === "Others" && !customReason.trim()) {
       Alert.alert("Please enter a reason", "Please provide your reason for cancellation");
       return;
     }
-    
+
     const finalReason = selectedCancelReason === "Others" ? customReason : selectedCancelReason;
-    
+
     try {
       setIsCancelling(true);
-      
+
       // Get userId from AsyncStorage
       const userId = await AsyncStorage.getItem('userId');
       const bookingId = route.params?.bookingId || bookingData?._id || bookingData?.id || bookingData?.bookingId;
-      
+
       if (!userId || !bookingId) {
         Alert.alert("Error", "Unable to cancel booking. Missing user or booking information.");
         setIsCancelling(false);
         return;
       }
-      
+
       console.log("Cancelling booking:", { bookingId, userId, reason: finalReason });
-      
+
       const response = await fetch(`${API_URL}/cancel-booking`, {
         method: 'POST',
         headers: {
@@ -240,11 +248,11 @@ const BookingSearchingScreen = () => {
           reason: finalReason
         })
       });
-      
+
       // Check if response is JSON before parsing
       const contentType = response.headers.get('content-type');
       let data;
-      
+
       if (contentType && contentType.includes('application/json')) {
         data = await response.json();
       } else {
@@ -252,17 +260,17 @@ const BookingSearchingScreen = () => {
         console.error("❌ Non-JSON response:", text);
         throw new Error("Server returned invalid response. Please check if the backend is running correctly.");
       }
-      
+
       if (response.ok && data.success) {
         console.log("✅ Booking cancelled successfully:", data);
-        
+
         // Close modal and reset state
         setShowCancelModal(false);
         setSelectedCancelReason("");
         setShowReasonOptions(false);
         setShowCustomInput(false);
         setCustomReason("");
-        
+
         // Navigate directly without alert
         navigation.navigate("MainTabs", { screen: "Home" });
       } else {
@@ -300,7 +308,7 @@ const BookingSearchingScreen = () => {
     // Only allow numbers and limit to 100
     const numericValue = text.replace(/[^0-9]/g, "");
     const amount = parseInt(numericValue) || 0;
-    
+
     if (amount <= 100) {
       setCustomAmount(numericValue);
     } else {
@@ -338,48 +346,41 @@ const BookingSearchingScreen = () => {
         return;
       }
 
-      // Calculate new total
-      const baseFare = bookingData.pricing?.baseFare || 0;
-      const discount = bookingData.pricing?.discount || 0;
-      const subtotal = bookingData.pricing?.finalAmount - (bookingData.quickFee || 0) + discount;
-      const newTotal = subtotal - discount + newQuickFee;
-      const newDriverEarnings = baseFare + newQuickFee;
 
+
+      // ALWAYS use base booking price (without quick fee)
+      const baseAmount = Number(liveBooking.price || 0) || 0;
+      const newTotal = baseAmount + newQuickFee;
+
+      const newDriverEarnings =
+        (liveBooking.pricing?.baseFare || baseAmount) + newQuickFee;
       const response = await axios.patch(`${API_URL}/booking/${bookingId}`, {
         quickFee: newQuickFee,
         totalDriverEarnings: newDriverEarnings,
         amountPay: newTotal.toString()
-      }, {
-        timeout: 8000 // 8 second timeout
       });
 
       console.log("Quick fee updated successfully:", response.data);
-      
-      // Update local booking data
-      bookingData.quickFee = newQuickFee;
-      if (bookingData.pricing) {
-        bookingData.pricing.finalAmount = newTotal;
-      }
 
       // Success - no popup needed, quick fee updated silently
     } catch (error) {
       console.error("Error updating quick fee:", error);
-      
+
       // Check if it's insufficient wallet balance error
       if (error.response?.data?.error?.code === 'INSUFFICIENT_BALANCE') {
         const required = error.response.data.error.required;
         const available = error.response.data.error.available;
         Alert.alert(
-          "Insufficient Wallet Balance", 
+          "Insufficient Wallet Balance",
           `You need ₹${required} more in your wallet to add this quick fee.\n\nCurrent balance: ₹${available}\nRequired: ₹${required}`
         );
       } else {
         Alert.alert(
-          "Update Failed", 
+          "Update Failed",
           error.response?.data?.message || "Failed to update quick fee. Please try again."
         );
       }
-      
+
       // Revert to original value on error
       setCurrentQuickFee(bookingData.quickFee || 0);
     } finally {
@@ -393,11 +394,10 @@ const BookingSearchingScreen = () => {
   const [customAmount, setCustomAmount] = useState("");
   const [isLocationExpanded, setIsLocationExpanded] = useState(false);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
-  
+
   // Quick Fee state - initialize from bookingData
-  const [currentQuickFee, setCurrentQuickFee] = useState(bookingData.quickFee || 0);
   const [isUpdatingQuickFee, setIsUpdatingQuickFee] = useState(false);
-  
+
   // Polling state
   const pollingIntervalRef = useRef(null);
   const searchTimeoutRef = useRef(null);
@@ -412,6 +412,30 @@ const BookingSearchingScreen = () => {
   const progressWidth = useSharedValue(25);
   const shimmerTranslate = useSharedValue(-1);
   const glowOpacity = useSharedValue(0.5);
+
+  // ⭐⭐⭐ PRO UNIVERSAL TOTAL CALCULATOR ⭐⭐⭐
+  const bookingAmounts = React.useMemo(() => {
+    const basePrice =
+      Number(liveBooking?.price) ||
+      Number(bookingData?.price) ||
+      0;
+
+    const quickFee =
+      currentQuickFee !== undefined
+        ? Number(currentQuickFee)
+        : Number(liveBooking?.quickFee || 0);
+
+    const totalPayable = basePrice + quickFee;
+
+    console.log(basePrice, "thisBasePrice");
+    console.log(quickFee, "thisIsQuickFee")
+
+    return {
+      basePrice,
+      quickFee,
+      totalPayable,
+    };
+  }, [liveBooking, currentQuickFee, bookingData]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -594,7 +618,7 @@ const BookingSearchingScreen = () => {
   const animatedShimmer = useAnimatedStyle(() => {
     return {
       transform: [
-        { 
+        {
           translateX: shimmerTranslate.value * (width - 40)
         }
       ],
@@ -712,12 +736,12 @@ const BookingSearchingScreen = () => {
     if (pickup) {
       let lat = pickup.latitude || pickup.lat;
       let lng = pickup.longitude || pickup.lng;
-      
+
       if (!lat && pickup.coordinates) {
         lat = pickup.coordinates.latitude || pickup.coordinates.lat;
         lng = pickup.coordinates.longitude || pickup.coordinates.lng;
       }
-      
+
       if (lat && lng && lat !== 0 && lng !== 0) {
         coordinates.push({ latitude: lat, longitude: lng });
         console.log("✅ Added pickup location:", lat, lng);
@@ -727,15 +751,15 @@ const BookingSearchingScreen = () => {
     // Add all valid stop coordinates in sequence
     locs.forEach((loc, index) => {
       if (loc.isFirst) return; // Skip pickup, already added
-      
+
       let lat = loc.latitude || loc.lat;
       let lng = loc.longitude || loc.lng;
-      
+
       if (!lat && loc.coordinates) {
         lat = loc.coordinates.latitude || loc.coordinates.lat;
         lng = loc.coordinates.longitude || loc.coordinates.lng;
       }
-      
+
       if (lat && lng && lat !== 0 && lng !== 0) {
         coordinates.push({ latitude: lat, longitude: lng });
         console.log(`✅ Added location ${index + 1}:`, lat, lng);
@@ -748,9 +772,8 @@ const BookingSearchingScreen = () => {
     if (coordinates.length >= 2) {
       try {
         const origin = `${coordinates[0].latitude},${coordinates[0].longitude}`;
-        const destination = `${coordinates[coordinates.length - 1].latitude},${
-          coordinates[coordinates.length - 1].longitude
-        }`;
+        const destination = `${coordinates[coordinates.length - 1].latitude},${coordinates[coordinates.length - 1].longitude
+          }`;
 
         // Build optimized waypoints for all intermediate stops
         let waypoints = "";
@@ -762,16 +785,25 @@ const BookingSearchingScreen = () => {
           console.log("🛣️ Waypoints:", waypointCoords.length);
         }
 
-        const directionsUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypoints}&key=${GOOGLE_API_KEY}&avoid=tolls`;
+
+
+        const url =
+          `https://maps.googleapis.com/maps/api/directions/json?` +
+          `origin=${origin}&destination=${destination}` +
+          `${waypoints}&mode=driving&key=${GOOGLE_API_KEY}`;
+
 
         console.log("🌐 Fetching route from Google Directions API...");
-        const response = await axios.get(directionsUrl);
+        const response = await axios.get(url);
 
         if (response.data.status === "OK" && response.data.routes.length > 0) {
+
+
           const route = response.data.routes[0];
-          const points = route.overview_polyline?.points
-            ? decodePolyline(route.overview_polyline.points)
-            : [];
+          const points = decodePolyline(
+            route.overview_polyline.points
+          );
+
           setRouteCoordinates(points);
 
           const totalDistance = route.legs.reduce(
@@ -791,15 +823,15 @@ const BookingSearchingScreen = () => {
           console.log(`📈 Route polyline points: ${points.length}`);
         } else {
           console.log("⚠️ Google API failed, using straight lines");
-          setRouteCoordinates(coordinates);
+
         }
       } catch (error) {
         console.error("❌ Error fetching directions:", error);
-        setRouteCoordinates(coordinates);
+
       }
     } else {
       console.log("📍 Not enough coordinates for route (need at least 2)");
-      setRouteCoordinates(coordinates);
+
     }
   };
 
@@ -811,7 +843,7 @@ const BookingSearchingScreen = () => {
         updateRoutePolyline();
       }, 1000); // Delay to ensure map is ready
     }
-  }, [normalizedLocations.length]);
+  }, [normalizedLocations]);
 
   // Real-time polling to check booking status
   useEffect(() => {
@@ -822,15 +854,14 @@ const BookingSearchingScreen = () => {
           console.error("No booking ID found for status polling. bookingData keys:", Object.keys(bookingData));
           return;
         }
-        const response = await axios.get(`${API_URL}/booking/${bookingId}`, {
-          timeout: 8000 // 8 second timeout
-        });
-        
+        const response = await axios.get(`${API_URL}/booking/${bookingId}`);
+
+        const booking = response.data; // your API returns flat object
+        setLiveBooking(booking);
+        setCurrentQuickFee(booking.quickFee || 0);
         console.log("📡 Full response:", response.data);
-        
-        // Backend returns booking directly in response.data (not wrapped in response.data.data)
-        const booking = response.data;
-        
+        console.log("🔥 REAL STATUS =", booking?.status);
+
         if (booking) {
           console.log("📊 Current booking details:");
           console.log("   - Booking ID:", booking._id);
@@ -838,18 +869,40 @@ const BookingSearchingScreen = () => {
           console.log("   - Rider ID:", booking.riderId);
           console.log("   - Rider Object:", booking.rider);
           console.log("   - Has rider assigned:", !!(booking.rider || booking.riderId));
-          
+
           // Check if rider has been assigned (status changed from "pending" to "accepted" or "ongoing")
-          if (booking.status === "accepted" || booking.status === "ongoing" || booking.rider || booking.riderId) {
+          if (booking.status === "cancelled") {
+            console.log("❌ Booking was auto-cancelled");
+
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+
+            setMessage("No riders available for this trip");
+
+            setTimeout(() => {
+              navigation.replace("MainTabs", { screen: "Home" });
+            }, 2000);
+
+            return;
+          }
+
+          if (
+            booking.status === "accepted" ||
+            booking.status === "ongoing" ||
+            booking.rider ||
+            booking.riderId
+          ) {
             console.log("✅ Rider accepted! Navigating to BookingDetail...");
             console.log("   - Triggering navigation with bookingId:", bookingId);
-            
+
             // Set flag to allow navigation
             setIsRiderAccepted(true);
-            
+
             // Update message to show order accepted
             setMessage("Order Accepted! Connecting you with rider...");
-            
+
             // Clear polling interval and timeout
             if (pollingIntervalRef.current) {
               clearInterval(pollingIntervalRef.current);
@@ -859,7 +912,7 @@ const BookingSearchingScreen = () => {
               clearTimeout(searchTimeoutRef.current);
               searchTimeoutRef.current = null;
             }
-            
+
             // Small delay to show the message, then navigate
             setTimeout(() => {
               console.log("🚀 Attempting navigation to BookingDetail...");
@@ -889,7 +942,7 @@ const BookingSearchingScreen = () => {
 
     // Start polling immediately
     checkBookingStatus();
-    
+
     // Poll every 3 seconds
     pollingIntervalRef.current = setInterval(checkBookingStatus, 3000);
 
@@ -904,7 +957,9 @@ const BookingSearchingScreen = () => {
         searchTimeoutRef.current = null;
       }
     };
-  }, [bookingData._id, bookingData.id, navigation]);
+  }, [bookingData._id]);
+
+
 
   // Handle timeout - automatically navigate to home
   useEffect(() => {
@@ -933,28 +988,28 @@ const BookingSearchingScreen = () => {
   // Calculate initial region based on all locations to fit them in view
   const getInitialRegion = () => {
     const locs = normalizedLocations || [];
-    
+
     // Filter locations with valid coordinates (including interpolated ones)
     const validLocs = locs.filter(loc => {
       let lat = loc.latitude || loc.lat;
       let lng = loc.longitude || loc.lng;
-      
+
       // Try coordinates object if direct coordinates not found
       if (!lat && loc.coordinates) {
         lat = loc.coordinates.latitude || loc.coordinates.lat;
         lng = loc.coordinates.longitude || loc.coordinates.lng;
       }
-      
+
       // For intermediate stops, we'll interpolate so consider them valid if pickup and drop exist
       if ((!lat || lat === 0) && !loc.isFirst && !loc.isLast) {
         const pickup = locs.find(l => l.isFirst);
         const drop = locs.find(l => l.isLast);
         return pickup && drop; // Valid if we can interpolate
       }
-      
+
       return lat && lng && lat !== 0 && lng !== 0;
     });
-    
+
     if (validLocs.length === 0) {
       return {
         latitude: 12.9716,
@@ -969,12 +1024,12 @@ const BookingSearchingScreen = () => {
       const location = validLocs[0];
       let lat = location.latitude || location.lat;
       let lng = location.longitude || location.lng;
-      
+
       if (!lat && location.coordinates) {
         lat = location.coordinates.latitude || location.coordinates.lat;
         lng = location.coordinates.longitude || location.coordinates.lng;
       }
-      
+
       return {
         latitude: lat || 12.9716,
         longitude: lng || 77.5946,
@@ -992,12 +1047,12 @@ const BookingSearchingScreen = () => {
     validLocs.forEach(loc => {
       let lat = loc.latitude || loc.lat;
       let lng = loc.longitude || loc.lng;
-      
+
       if (!lat && loc.coordinates) {
         lat = loc.coordinates.latitude || loc.coordinates.lat;
         lng = loc.coordinates.longitude || loc.coordinates.lng;
       }
-      
+
       if (lat && lng) {
         minLat = Math.min(minLat, lat);
         maxLat = Math.max(maxLat, lat);
@@ -1009,11 +1064,11 @@ const BookingSearchingScreen = () => {
     // Calculate center and deltas
     const centerLat = (minLat + maxLat) / 2;
     const centerLng = (minLng + maxLng) / 2;
-    
+
     // Calculate deltas with proper padding to show all markers
     const latSpread = maxLat - minLat;
     const lngSpread = maxLng - minLng;
-    
+
     // Add 50% padding around the markers to ensure they fit nicely
     const latDelta = Math.max(latSpread * 1.5, 0.005); // Minimum zoom
     const lngDelta = Math.max(lngSpread * 1.5, 0.005); // Minimum zoom
@@ -1031,22 +1086,22 @@ const BookingSearchingScreen = () => {
     const locs = normalizedLocations || [];
     console.log("Rendering markers for locations:", locs.length, locs);
     console.log("Full location data:", JSON.stringify(locs, null, 2));
-    
+
     // Calculate total number of drop locations (excluding pickup)
     const totalDrops = locs.filter(loc => !loc.isFirst).length;
     const showNumbers = totalDrops > 1;
     console.log(`📊 Total drops: ${totalDrops}, Show numbers: ${showNumbers}`);
-    
+
     let dropCounter = 0; // Counter for drop locations only
-    
+
     return locs.map((loc, idx) => {
       let markerTitle = "";
       let isPickup = loc.isFirst;
       let isDropoff = loc.isLast;
-      
+
       // Increment drop counter for non-pickup locations
       const dropNumber = isPickup ? 0 : ++dropCounter;
-      
+
       if (isPickup) {
         markerTitle = "Pickup Location";
       } else if (isDropoff) {
@@ -1058,7 +1113,7 @@ const BookingSearchingScreen = () => {
       // Get coordinates from location or coordinates object
       let latitude = loc.latitude || loc.lat;
       let longitude = loc.longitude || loc.lng;
-      
+
       console.log(`Processing marker ${idx} (${markerTitle}):`, {
         originalLat: latitude,
         originalLng: longitude,
@@ -1066,31 +1121,31 @@ const BookingSearchingScreen = () => {
         isDropoff,
         hasCoordinatesObj: !!loc.coordinates
       });
-      
+
       // If no direct coordinates, try from coordinates object
       if ((!latitude || latitude === 0) && loc.coordinates) {
         latitude = loc.coordinates.latitude || loc.coordinates.lat;
         longitude = loc.coordinates.longitude || loc.coordinates.lng;
         console.log(`Found coordinates in object for ${markerTitle}:`, latitude, longitude);
       }
-      
+
       // For intermediate stops without coordinates, interpolate between pickup and drop
       if ((!latitude || !longitude || latitude === 0 || longitude === 0) && !isPickup && !isDropoff) {
         console.log(`Need to interpolate coordinates for stop ${idx}:`, loc.address);
-        
+
         // Find pickup and drop coordinates more robustly
         const pickup = locs.find(l => l.isFirst === true);
         const drop = locs.find(l => l.isLast === true);
-        
+
         console.log("Found pickup:", pickup ? "YES" : "NO");
         console.log("Found drop:", drop ? "YES" : "NO");
-        
+
         if (pickup && drop) {
           let pickupLat = pickup.latitude || pickup.lat;
           let pickupLng = pickup.longitude || pickup.lng;
           let dropLat = drop.latitude || drop.lat;
           let dropLng = drop.longitude || drop.lng;
-          
+
           // Try coordinates object for pickup/drop if needed
           if (!pickupLat && pickup.coordinates) {
             pickupLat = pickup.coordinates.latitude || pickup.coordinates.lat;
@@ -1100,31 +1155,31 @@ const BookingSearchingScreen = () => {
             dropLat = drop.coordinates.latitude || drop.coordinates.lat;
             dropLng = drop.coordinates.longitude || drop.coordinates.lng;
           }
-          
+
           console.log("Pickup coords:", pickupLat, pickupLng);
           console.log("Drop coords:", dropLat, dropLng);
-          
-          if (pickupLat && pickupLng && dropLat && dropLng && 
-              pickupLat !== 0 && pickupLng !== 0 && dropLat !== 0 && dropLng !== 0) {
-            
+
+          if (pickupLat && pickupLng && dropLat && dropLng &&
+            pickupLat !== 0 && pickupLng !== 0 && dropLat !== 0 && dropLng !== 0) {
+
             // Calculate intermediate position (roughly halfway with slight offset)
             const intermediateStops = locs.filter(l => !l.isFirst && !l.isLast);
             const stopIndex = intermediateStops.findIndex(s => s.id === loc.id);
             const totalIntermediateStops = intermediateStops.length;
-            
+
             console.log(`Interpolating: stopIndex=${stopIndex}, total=${totalIntermediateStops}`);
-            
+
             // Distribute stops evenly between pickup and drop
             const ratio = totalIntermediateStops === 1 ? 0.5 : (stopIndex + 1) / (totalIntermediateStops + 1);
-            
+
             latitude = pickupLat + (dropLat - pickupLat) * ratio;
             longitude = pickupLng + (dropLng - pickupLng) * ratio;
-            
+
             // Add small offset to avoid overlapping markers
             const offset = 0.0005; // Smaller offset for better accuracy
             latitude += (stopIndex % 2 === 0 ? offset : -offset);
             longitude += (stopIndex % 2 === 0 ? offset : -offset);
-            
+
             console.log(`✅ Interpolated coordinates for ${markerTitle}:`, latitude, longitude);
           } else {
             console.log(`❌ Cannot interpolate - invalid pickup/drop coordinates`);
@@ -1133,7 +1188,7 @@ const BookingSearchingScreen = () => {
           console.log(`❌ Cannot interpolate - missing pickup or drop`);
         }
       }
-      
+
       // Force show all markers - even if coordinates are 0,0 use a fallback near the area
       if (!latitude || !longitude || latitude === 0 || longitude === 0) {
         if (!isPickup && !isDropoff) {
@@ -1146,9 +1201,9 @@ const BookingSearchingScreen = () => {
           return null;
         }
       }
-      
+
       console.log(`✅ Final marker ${idx} (${markerTitle}):`, latitude, longitude);
-      
+
       return (
         <Marker
           key={`marker-${loc.id || idx}-${latitude}-${longitude}-${Date.now()}`}
@@ -1164,8 +1219,8 @@ const BookingSearchingScreen = () => {
           {isPickup ? (
             <Image
               source={require("../assets/pickup.png")}
-              style={{ 
-                width: 40, 
+              style={{
+                width: 40,
                 height: 40,
               }}
               resizeMode="contain"
@@ -1184,8 +1239,8 @@ const BookingSearchingScreen = () => {
           ) : (
             <Image
               source={require("../assets/drop.png")}
-              style={{ 
-                width: 40, 
+              style={{
+                width: 40,
                 height: 40,
               }}
               resizeMode="contain"
@@ -1199,7 +1254,7 @@ const BookingSearchingScreen = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      
+
       {/* Custom Header without Back Button */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Finding Rider</Text>
@@ -1257,7 +1312,7 @@ const BookingSearchingScreen = () => {
               lineJoin="round"
               tappable={false}
               fillColor="#EC4D4A"
-              geodesic={false}
+              geodesic={true}
               miterLimit={10}
             />
           </>
@@ -1281,10 +1336,10 @@ const BookingSearchingScreen = () => {
                 <Animated.View style={[styles.progressFill, animatedProgressBar]}>
                   {/* Gradient overlay effect */}
                   <View style={styles.gradientOverlay} />
-                  
+
                   {/* Shimmer effect */}
                   <Animated.View style={[styles.shimmerEffect, animatedShimmer]} />
-                  
+
                   {/* Glowing indicator dot */}
                   <Animated.View style={[styles.glowingDot, animatedGlow]} />
                 </Animated.View>
@@ -1323,7 +1378,7 @@ const BookingSearchingScreen = () => {
                 <Text style={styles.tipTitle}>
                   Add a Quick Fee to Find Rider Faster
                 </Text>
-                
+
                 {/* Quick Amount Buttons with + Icon */}
                 <View style={styles.tipOptionsContainer}>
                   {[25, 50, 75].map((amount) => (
@@ -1347,7 +1402,7 @@ const BookingSearchingScreen = () => {
                       </Text>
                     </TouchableOpacity>
                   ))}
-                  
+
                   {/* Custom Amount + Icon Button */}
                   <TouchableOpacity
                     style={[
@@ -1358,10 +1413,10 @@ const BookingSearchingScreen = () => {
                     onPress={() => setShowCustomAmount(!showCustomAmount)}
                     disabled={isUpdatingQuickFee}
                   >
-                    <Ionicons 
-                      name={showCustomAmount ? "close" : "add"} 
-                      size={20} 
-                      color="#EC4D4A" 
+                    <Ionicons
+                      name={showCustomAmount ? "close" : "add"}
+                      size={20}
+                      color="#EC4D4A"
                     />
                   </TouchableOpacity>
                 </View>
@@ -1408,8 +1463,8 @@ const BookingSearchingScreen = () => {
                 )}
 
                 <Text style={styles.tipOptionsNote}>
-                  {currentQuickFee > 0 ? 
-                    `₹${currentQuickFee} quick fee added - helps find drivers faster` : 
+                  {currentQuickFee > 0 ?
+                    `₹${currentQuickFee} quick fee added - helps find drivers faster` :
                     "Add a quick fee to speed up your booking"
                   }
                 </Text>
@@ -1423,50 +1478,25 @@ const BookingSearchingScreen = () => {
           <View style={styles.bookingHeader}>
             <Text style={styles.bookingTitle}>Booking Details</Text>
             <Text style={styles.paymentBadge}>
-              {bookingData.payFrom || bookingData.paymentMethod || "Payment Info"}
+              {liveBooking.payFrom || liveBooking.paymentMethod || "Payment Info"}
             </Text>
           </View>
 
           <View style={styles.vehicleInfo}>
             <Text style={styles.vehicleText}>
-              {bookingData.vehicleType || bookingData.selectedVehicle?.name || "Vehicle"} • ₹
-              {(() => {
-                // ALWAYS show the base booking price (not including quick fee)
-                const price = bookingData.price;
-                const amountPay = bookingData.amountPay;
-                const finalAmount = bookingData.pricing?.finalAmount;
-                
-                console.log('🚗 Vehicle Info - Base Price Display:', { price, amountPay, finalAmount });
-                
-                // First try price (the actual base booking amount - NO QUICK FEE)
-                if (price && Number(price) > 0) {
-                  return Number(price);
-                }
-                
-                // Then try amountPay if it's not 0
-                const amountPayNum = typeof amountPay === 'string' ? parseFloat(amountPay) : Number(amountPay);
-                if (amountPayNum && amountPayNum > 0) {
-                  return amountPayNum;
-                }
-                
-                // Finally try finalAmount
-                return Number(finalAmount) || 0;
-              })()}
+              {bookingData.vehicleType || bookingData.selectedVehicle?.name || "Vehicle"} • ₹{bookingAmounts.totalPayable}
             </Text>
             <Text style={styles.vehicleSubtext}>Base booking amount (excludes quick fee)</Text>
           </View>
 
           {/* Total Amount Paid - Show for Wallet/Online Payments */}
-          {(bookingData.paymentMethod === 'wallet' || 
-            bookingData.paymentMethod === 'online' ||
-            bookingData.payFrom?.toLowerCase().includes('wallet') ||
-            bookingData.payFrom?.toLowerCase().includes('online')) && (
+          {true && (
             <View style={styles.totalPaidContainer}>
               {/* Wallet Split Payment Breakdown */}
               {bookingData.walletUsed && bookingData.pricing?.walletDeduction > 0 && (
                 <View style={styles.walletSplitBreakdown}>
                   <Text style={styles.paymentBreakdownTitle}>💳 Payment Breakdown</Text>
-                  
+
                   {/* Wallet Portion */}
                   <View style={styles.breakdownRow}>
                     <View style={styles.breakdownLeftSide}>
@@ -1477,20 +1507,20 @@ const BookingSearchingScreen = () => {
                       ₹{bookingData.pricing.walletDeduction.toFixed(0)}
                     </Text>
                   </View>
-                  
+
                   {/* Remaining Amount (if partial payment) */}
                   {bookingData.pricing.finalAmount > 0 && (
                     <View style={styles.breakdownRow}>
                       <View style={styles.breakdownLeftSide}>
-                        <Ionicons 
-                          name={bookingData.paymentMethod === 'cash' ? 'cash' : 'card'} 
-                          size={14} 
-                          color="#FF9800" 
+                        <Ionicons
+                          name={liveBooking.paymentMethod === 'cash' ? 'cash' : 'card'}
+                          size={14}
+                          color="#FF9800"
                         />
                         <Text style={styles.breakdownLabelCash}>
-                          To Pay via {bookingData.cashPaymentOption === 'pickup' ? 'Cash (Pickup)' : 
-                                     bookingData.cashPaymentOption === 'delivery' ? 'Cash (Delivery)' : 
-                                     bookingData.paymentMethod === 'online' ? 'Online' : 'Cash'}
+                          To Pay via {bookingData.cashPaymentOption === 'pickup' ? 'Cash (Pickup)' :
+                            bookingData.cashPaymentOption === 'delivery' ? 'Cash (Delivery)' :
+                              liveBooking.paymentMethod === 'online' ? 'Online' : 'Cash'}
                         </Text>
                       </View>
                       <Text style={styles.breakdownAmountCash}>
@@ -1498,89 +1528,37 @@ const BookingSearchingScreen = () => {
                       </Text>
                     </View>
                   )}
-                  
+
                   {/* Total Line */}
                   <View style={[styles.breakdownRow, styles.totalRow]}>
                     <Text style={styles.totalLabel}>Total Amount</Text>
                     <Text style={styles.totalAmount}>
                       ₹{(
-                        (bookingData.pricing.walletDeduction || 0) + 
+                        (bookingData.pricing.walletDeduction || 0) +
                         (bookingData.pricing.finalAmount || 0)
                       ).toFixed(0)}
                     </Text>
                   </View>
                 </View>
               )}
-              
+
               {/* Standard Payment Display (non-split) */}
               {!bookingData.walletUsed || !bookingData.pricing?.walletDeduction && (
                 <>
                   <View style={styles.totalPaidRow}>
                     <Text style={styles.totalPaidLabel}>
-                      {bookingData.paymentMethod === 'wallet' || bookingData.payFrom?.toLowerCase().includes('wallet') 
-                        ? '💳 Total Paid from Wallet' 
+                      {liveBooking.paymentMethod === 'wallet' || liveBooking.payFrom?.toLowerCase().includes('wallet')
+                        ? '💳 Total Paid from Wallet'
                         : '💳 Total Paid Online'}
                     </Text>
                     <Text style={styles.totalPaidAmount}>
-                      ₹{(() => {
-                        // Get base amount - USE PRICE FIRST!
-                        const price = bookingData.price;
-                        const amountPay = bookingData.amountPay;
-                        const finalAmount = bookingData.pricing?.finalAmount;
-                        
-                        let baseAmount = 0;
-                        
-                        // Priority 1: Use price (the actual booking amount)
-                        if (price && Number(price) > 0) {
-                          baseAmount = Number(price);
-                        } 
-                        // Priority 2: Use amountPay if it's not 0
-                        else {
-                          const amountPayNum = typeof amountPay === 'string' ? parseFloat(amountPay) : Number(amountPay);
-                          if (amountPayNum && amountPayNum > 0) {
-                            baseAmount = amountPayNum;
-                          } else {
-                            // Priority 3: Use finalAmount
-                            baseAmount = Number(finalAmount) || 0;
-                          }
-                        }
-                        
-                        const quickFee = Number(currentQuickFee || bookingData.quickFee || 0);
-                        const total = baseAmount + quickFee;
-                        
-                        console.log('💰 Total Paid Calculation:', {
-                          price,
-                          amountPay,
-                          finalAmount,
-                          baseAmount,
-                          quickFee,
-                          total
-                        });
-                        
-                        return total.toFixed(0);
-                      })()}
+                      ₹{bookingAmounts.totalPayable.toFixed(0)}
                     </Text>
                   </View>
                   {currentQuickFee > 0 && (
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownText}>
-                        Base fare: ₹{(() => {
-                          const price = bookingData.price;
-                          const amountPay = bookingData.amountPay;
-                          const finalAmount = bookingData.pricing?.finalAmount;
-                          
-                          // Use price first
-                          if (price && Number(price) > 0) {
-                            return Number(price).toFixed(0);
-                          }
-                          
-                          const amountPayNum = typeof amountPay === 'string' ? parseFloat(amountPay) : Number(amountPay);
-                          if (amountPayNum && amountPayNum > 0) {
-                            return amountPayNum.toFixed(0);
-                          }
-                          
-                          return (Number(finalAmount) || 0).toFixed(0);
-                        })()} + Quick fee: ₹{currentQuickFee}
+                        Base fare: ₹{bookingAmounts.basePrice} + Quick fee: ₹{bookingAmounts.quickFee}
                       </Text>
                     </View>
                   )}
@@ -1589,97 +1567,97 @@ const BookingSearchingScreen = () => {
             </View>
           )}
 
-            {normalizedLocations?.length > 0 && (
-              <View style={styles.routeInfo}>
-                {/* LocationSelectorScreen-style visual route indicators */}
-                <View style={styles.routeVisualContainer}>
-                  {/* Helper function to get locations to display */}
-                  {(() => {
-                    const allLocations = normalizedLocations;
-                    const pickupLocation = allLocations.find(loc => loc.isFirst);
-                    const dropLocation = allLocations.find(loc => loc.isLast);
-                    const intermediateStops = allLocations.filter(loc => !loc.isFirst && !loc.isLast);
-                    
-                    // Determine which locations to show
-                    let locationsToShow;
-                    if (isLocationExpanded) {
-                      locationsToShow = allLocations;
-                    } else {
-                      locationsToShow = [pickupLocation, dropLocation].filter(Boolean);
-                    }
-                    
-                    return locationsToShow.map((location, index) => {
-                      const isFirst = location.isFirst;
-                      const isLast = location.isLast;
-                      const originalIndex = allLocations.findIndex(loc => loc.id === location.id);
-                      const isLastInDisplayedArray = index === locationsToShow.length - 1;
-                      
-                      return (
-                        <View key={location.id || originalIndex} style={styles.routeItemContainer}>
-                          <View style={styles.routeIndicatorContainer}>
-                            {/* Stop indicator dot (LocationSelectorScreen style) */}
-                            <View style={styles.stopDotWrapper}>
-                              <View style={[
-                                styles.stopDot, 
-                                isFirst ? styles.greenDot : styles.redDot
-                              ]}>
-                                {!isFirst && <Text style={styles.stopNumber}>{originalIndex}</Text>}
-                                {isFirst && <Ionicons name="location" size={12} color="#fff" />}
-                              </View>
-                              {!isLastInDisplayedArray && <View style={styles.verticalLine} />}
+          {normalizedLocations?.length > 0 && (
+            <View style={styles.routeInfo}>
+              {/* LocationSelectorScreen-style visual route indicators */}
+              <View style={styles.routeVisualContainer}>
+                {/* Helper function to get locations to display */}
+                {(() => {
+                  const allLocations = normalizedLocations;
+                  const pickupLocation = allLocations.find(loc => loc.isFirst);
+                  const dropLocation = allLocations.find(loc => loc.isLast);
+                  const intermediateStops = allLocations.filter(loc => !loc.isFirst && !loc.isLast);
+
+                  // Determine which locations to show
+                  let locationsToShow;
+                  if (isLocationExpanded) {
+                    locationsToShow = allLocations;
+                  } else {
+                    locationsToShow = [pickupLocation, dropLocation].filter(Boolean);
+                  }
+
+                  return locationsToShow.map((location, index) => {
+                    const isFirst = location.isFirst;
+                    const isLast = location.isLast;
+                    const originalIndex = allLocations.findIndex(loc => loc.id === location.id);
+                    const isLastInDisplayedArray = index === locationsToShow.length - 1;
+
+                    return (
+                      <View key={location.id || originalIndex} style={styles.routeItemContainer}>
+                        <View style={styles.routeIndicatorContainer}>
+                          {/* Stop indicator dot (LocationSelectorScreen style) */}
+                          <View style={styles.stopDotWrapper}>
+                            <View style={[
+                              styles.stopDot,
+                              isFirst ? styles.greenDot : styles.redDot
+                            ]}>
+                              {!isFirst && <Text style={styles.stopNumber}>{originalIndex}</Text>}
+                              {isFirst && <Ionicons name="location" size={12} color="#fff" />}
                             </View>
-                            
-                            {/* Location text */}
-                            <View style={styles.locationTextContainer}>
-                              <Text style={styles.locationLabel}>
-                                {isFirst ? "Pickup" : isLast ? "Drop" : `Stop ${originalIndex}`}
-                              </Text>
-                              <Text 
-                                style={styles.locationAddress} 
-                                numberOfLines={2}
-                              >
-                                {location.address || `Location ${originalIndex + 1}`}
-                              </Text>
-                            </View>
+                            {!isLastInDisplayedArray && <View style={styles.verticalLine} />}
+                          </View>
+
+                          {/* Location text */}
+                          <View style={styles.locationTextContainer}>
+                            <Text style={styles.locationLabel}>
+                              {isFirst ? "Pickup" : isLast ? "Drop" : `Stop ${originalIndex}`}
+                            </Text>
+                            <Text
+                              style={styles.locationAddress}
+                              numberOfLines={2}
+                            >
+                              {location.address || `Location ${originalIndex + 1}`}
+                            </Text>
                           </View>
                         </View>
-                      );
-                    });
-                  })()}
-                  
-                  {/* Show intermediate stops info and expand/collapse button */}
-                  {normalizedLocations.filter(loc => !loc.isFirst && !loc.isLast).length > 0 && (
-                    <View style={styles.expandCollapseContainer}>
-                      {!isLocationExpanded && (
-                        <View style={styles.hiddenStopsInfo}>
-                          <Text style={styles.hiddenStopsText}>
-                            +{normalizedLocations.filter(loc => !loc.isFirst && !loc.isLast).length} more stop{normalizedLocations.filter(loc => !loc.isFirst && !loc.isLast).length > 1 ? 's' : ''}
-                          </Text>
-                        </View>
-                      )}
-                      
-                      <TouchableOpacity 
-                        style={styles.expandButton}
-                        onPress={() => setIsLocationExpanded(!isLocationExpanded)}
-                      >
-                        <Text style={styles.expandButtonText}>
-                          {isLocationExpanded ? 'Show Less' : 'View Details'}
+                      </View>
+                    );
+                  });
+                })()}
+
+                {/* Show intermediate stops info and expand/collapse button */}
+                {normalizedLocations.filter(loc => !loc.isFirst && !loc.isLast).length > 0 && (
+                  <View style={styles.expandCollapseContainer}>
+                    {!isLocationExpanded && (
+                      <View style={styles.hiddenStopsInfo}>
+                        <Text style={styles.hiddenStopsText}>
+                          +{normalizedLocations.filter(loc => !loc.isFirst && !loc.isLast).length} more stop{normalizedLocations.filter(loc => !loc.isFirst && !loc.isLast).length > 1 ? 's' : ''}
                         </Text>
-                        <Ionicons 
-                          name={isLocationExpanded ? "chevron-up" : "chevron-down"} 
-                          size={14} 
-                          color="#EC4D4A" 
-                          style={styles.expandIcon}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
+                      </View>
+                    )}
+
+                    <TouchableOpacity
+                      style={styles.expandButton}
+                      onPress={() => setIsLocationExpanded(!isLocationExpanded)}
+                    >
+                      <Text style={styles.expandButtonText}>
+                        {isLocationExpanded ? 'Show Less' : 'View Details'}
+                      </Text>
+                      <Ionicons
+                        name={isLocationExpanded ? "chevron-up" : "chevron-down"}
+                        size={14}
+                        color="#EC4D4A"
+                        style={styles.expandIcon}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
-            )}
+            </View>
+          )}
 
           {/* Cancel Request Button - Porter/Rapido Style */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.cancelRequestButton}
             onPress={handleCancelRequest}
             activeOpacity={0.8}
@@ -1697,12 +1675,12 @@ const BookingSearchingScreen = () => {
         animationType="slide"
         onRequestClose={handleCloseCancelModal}
       >
-        <TouchableOpacity 
-          style={styles.bottomSheetOverlay} 
+        <TouchableOpacity
+          style={styles.bottomSheetOverlay}
           activeOpacity={1}
           onPress={handleCloseCancelModal}
         >
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.bottomSheetContent}
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
@@ -1719,10 +1697,10 @@ const BookingSearchingScreen = () => {
                   <Text style={[styles.reasonInputText, !selectedCancelReason && styles.placeholderText]}>
                     {selectedCancelReason || "Select your reason."}
                   </Text>
-                  <Ionicons 
-                    name="chevron-down" 
-                    size={20} 
-                    color="#666" 
+                  <Ionicons
+                    name="chevron-down"
+                    size={20}
+                    color="#666"
                   />
                 </View>
               </TouchableOpacity>
@@ -2047,7 +2025,7 @@ const styles = StyleSheet.create({
   tipOptionDisabled: {
     opacity: 0.6,
   },
-  
+
   // Custom Tip Toggle & Input Styles
   customTipToggle: {
     marginTop: 8,
@@ -2128,7 +2106,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 8,
   },
-  
+
   // Old Custom Amount Styles (keeping for compatibility)
   customAmountContainer: {
     marginTop: scale(12),
