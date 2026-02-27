@@ -9,7 +9,6 @@ import {
   Alert,
   Dimensions,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   Animated,
   Modal,
@@ -26,11 +25,11 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import HeaderWithBackButton from "../components/HeaderWithBackButton";
 import KeyboardAwareWrapper from "../components/KeyboardAwareWrapper";
-import { Checkbox } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GOOGLE_API_KEY } from "../env/googleMapApi";
 
 const { width, height } = Dimensions.get("window");
-const GOOGLE_API_KEY = "AIzaSyDwOFrgNmM51uT1F1zg_L0Em5ujW9obcHk"; // replace with your key
+
 
 const LocationSelectorScreen = () => {
   const insets = useSafeAreaInsets();
@@ -559,7 +558,7 @@ const LocationSelectorScreen = () => {
   const [stopsDetails, setStopsDetails] = useState([null]);
 
   const [suggestions, setSuggestions] = useState([]);
-  const [activeInput, setActiveInput] = useState(null);
+  const [activeInput, setActiveInput] = useState(stops.length > 0 ? "stop-0" : null); // Track which input is active for suggestions
 
   const [userName, setUserName] = useState("User");
   const [userPhone, setUserPhone] = useState("");
@@ -2573,26 +2572,39 @@ const LocationSelectorScreen = () => {
           </View>
 
           {/* Buttons: Select on Map & Saved Address - Show only when input is focused and empty */}
-         
-              <View style={styles.topButtonRow}>
-                <TouchableOpacity
-                  style={styles.topButton}
-                  onPress={() => {
-                    const idx = parseInt(activeInput.replace('stop-', ''), 10);
-                    if (!isNaN(idx)) {
-                      openMapForStop(idx);
-                    }
-                  }}
-                >
-                  <Image
-                    source={require("../assets/location.png")}
-                    style={{ width: 22, height: 22, marginRight: 6 }}
-                    resizeMode="contain"
-                  />
-                  <Text style={styles.topButtonText}>Select on Map</Text>
-                </TouchableOpacity>
-              </View>
-            
+
+          <View style={styles.topButtonRow}>
+            <TouchableOpacity
+              style={styles.topButton}
+              onPress={() => {
+                let idx = null;
+
+                if (activeInput) {
+                  idx = parseInt(activeInput.replace('stop-', ''), 10);
+                } else {
+                  // Auto-select first empty stop
+                  idx = stops.findIndex((stop) => !stop || stop.trim() === '');
+
+                  if (idx === -1) {
+                    Alert.alert("No Empty Field", "Please add a new stop first.");
+                    return;
+                  }
+                }
+
+                if (!isNaN(idx)) {
+                  openMapForStop(idx);
+                }
+              }}
+            >
+              <Image
+                source={require("../assets/location.png")}
+                style={{ width: 22, height: 22, marginRight: 6 }}
+                resizeMode="contain"
+              />
+              <Text style={styles.topButtonText}>Select on Map</Text>
+            </TouchableOpacity>
+          </View>
+
 
           {/* Map with Polyline */}
           <View style={styles.mapCard}>
@@ -2620,14 +2632,21 @@ const LocationSelectorScreen = () => {
               )}
 
               {/* ✅ Pickup */}
+              {/* ✅ Pickup Marker (Green Icon) */}
               {(location || currentLocation) && (
                 <Marker
                   coordinate={location || currentLocation}
                   title="Pickup"
-                />
+                >
+                  <Image
+                    source={require("../assets/pickup.png")}
+                    style={{ width: 40, height: 40 }}
+                    resizeMode="contain"
+                  />
+                </Marker>
               )}
 
-              {/* ✅ Drops */}
+              {/* ✅ Drop Markers (Red Icon + Number Badge) */}
               {stopsDetails
                 .filter(d => d?.geometry?.location)
                 .map((d, i) => (
@@ -2638,7 +2657,31 @@ const LocationSelectorScreen = () => {
                       longitude: d.geometry.location.lng,
                     }}
                     title={`Drop ${i + 1}`}
-                  />
+                  >
+                    <View style={{ alignItems: "center" }}>
+                      <Image
+                        source={require("../assets/drop.png")}
+                        style={{ width: 40, height: 40 }}
+                        resizeMode="contain"
+                      />
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: 4,
+                          backgroundColor: "#EC4D4A",
+                          width: 18,
+                          height: 18,
+                          borderRadius: 9,
+                          justifyContent: "center",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text style={{ color: "#fff", fontSize: 10, fontWeight: "bold" }}>
+                          {i + 1}
+                        </Text>
+                      </View>
+                    </View>
+                  </Marker>
                 ))}
             </MapView>
           </View>
@@ -2728,7 +2771,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
     paddingBottom: 90, // Add padding for fixed button
   },
-  mapStyle: { width: "100%", height: "100%" },
+  mapStyle: { flex: 1 },
   card: {
     backgroundColor: "#fff",
     margin: 16,
@@ -2741,8 +2784,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 12,
-    elevation: 3,
-    overflow: "hidden",
     flex: 1,
   },
   locationRow: {
@@ -2940,12 +2981,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   suggestionBox: {
-  backgroundColor: "#fff",
-  borderRadius: 8,
-  elevation: 5,
-  marginTop: 5,
-  paddingVertical: 5,
-},
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    elevation: 5,
+    marginTop: 5,
+    paddingVertical: 5,
+  },
 });
 
 export default LocationSelectorScreen;

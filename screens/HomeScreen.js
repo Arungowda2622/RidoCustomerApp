@@ -22,10 +22,10 @@ import * as Location from "expo-location";
 import axios from "axios"; // For reverse geocoding
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-const { width, height } = Dimensions.get("window");
+import { GOOGLE_API_KEY } from "../env/googleMapApi";
 
+const { width, height } = Dimensions.get("window");
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
-const GOOGLE_API_KEY = "AIzaSyDboH1OPn2tZixD8iFGiH9EJPvzsd4CL2Q";
 
 const HomeScreen = () => {
   const [user, setUser] = useState(null);

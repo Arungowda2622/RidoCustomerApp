@@ -30,13 +30,11 @@ import Animated, {
 import { useNavigation, useRoute } from "@react-navigation/native";
 import axios from "axios";
 import { API_URL } from '../utils/api';
+import { GOOGLE_API_KEY } from "../env/googleMapApi";
 
 const { width, height } = Dimensions.get("window");
 // Responsive size helper
 const scale = (size) => Math.round((width / 375) * size);
-
-// Google API key for route directions
-const GOOGLE_API_KEY = "AIzaSyDwOFrgNmM51uT1F1zg_L0Em5ujW9obcHk";
 
 const BookingSearchingScreen = () => {
   const navigation = useNavigation();

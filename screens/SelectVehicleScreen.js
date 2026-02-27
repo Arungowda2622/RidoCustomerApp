@@ -1,5 +1,3 @@
-
-
 import React, {
   useState,
   useEffect,
@@ -17,35 +15,26 @@ import {
   ScrollView,
   Image,
   Dimensions,
-  SafeAreaView,
   ActivityIndicator,
   Alert,
-  TextInput,
-  FlatList,
 } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import axios from "axios";
-
 import {
-  getAllPrices,
-  getAllVehicles,
   calculateDistance,
   getCurrentTimeSlot,
 } from "../utils/PriceApi";
 import {
   calculateDynamicPrice,
-  getVehiclePricing,
-  getPricingFactors,
 } from "../utils/AuthApi";
 import { API_URL } from "../utils/api";
 import HeaderWithBackButton from "../components/HeaderWithBackButton";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GOOGLE_API_KEY } from "../env/googleMapApi";
 
 const { width, height } = Dimensions.get("window");
 
-// Google API key for Places Autocomplete
-const GOOGLE_API_KEY = "AIzaSyDG48YF2dsvPN0qHX3_vSaTJj6aqg3-Oc4";
 
 // Responsive scaling function
 const scaleSize = (size) => {
