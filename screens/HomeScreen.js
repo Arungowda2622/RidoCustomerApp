@@ -537,41 +537,42 @@ const HomeScreen = () => {
           onPress={() => navigation.openDrawer()}
           style={styles.menuButton}
         >
-          <Image
+          <Ionicons name="menu" size={24} color="#333" />
+          {/* <Image
             source={require("../assets/menu.png")}
             style={styles.menuIcon}
-          />
+          /> */}
         </TouchableOpacity>
 
-       <TouchableOpacity
-  style={styles.porterLocationCard}
-  onPress={() =>
-    navigation.navigate("LocationSelectorScreen", {
-      currentLocation,
-      currentAddress,
-    })
-  }
-  activeOpacity={0.8}
->
-  <View style={styles.porterLeftSection}>
-    <View style={styles.porterIconCircle}>
-      <Ionicons name="arrow-up" size={14} color="#2ECC71" />
-    </View>
+        <TouchableOpacity
+          style={styles.porterLocationCard}
+          onPress={() =>
+            navigation.navigate("LocationSelectorScreen", {
+              currentLocation,
+              currentAddress,
+            })
+          }
+          activeOpacity={0.8}
+        >
+          <View style={styles.porterLeftSection}>
+            <View style={styles.porterIconCircle}>
+              <Ionicons name="arrow-up" size={14} color="#2ECC71" />
+            </View>
 
-    <View style={{ flex: 1 }}>
-      <Text style={styles.porterLabel}>Pick up from</Text>
-      <Text
-        style={styles.porterAddress}
-        numberOfLines={1}
-        ellipsizeMode="tail"
-      >
-        {currentAddress || "Fetching location..."}
-      </Text>
-    </View>
-  </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.porterLabel}>Pick up from</Text>
+              <Text
+                style={styles.porterAddress}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {currentAddress || "Fetching location..."}
+              </Text>
+            </View>
+          </View>
 
-  <Ionicons name="chevron-forward" size={18} color="#888" />
-</TouchableOpacity>
+          <Ionicons name="chevron-forward" size={18} color="#888" />
+        </TouchableOpacity>
       </View>
 
       {/* Scrollable Content */}
@@ -677,7 +678,7 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: width * 0.015,
-    marginRight: width * 0.02,
+    marginRight: width * 0.01,
   },
   menuIcon: {
     width: width * 0.07,
@@ -817,11 +818,11 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   imageContainer: {
-   
+
     width: "100%",
     height: height * 0.7,
     overflow: "hidden",
-  
+
   },
   bottomImage: {
     width: "100%",
@@ -892,50 +893,50 @@ const styles = StyleSheet.create({
     marginRight: width * 0.01,
   },
   porterLocationCard: {
-  flex: 1,
-  backgroundColor: "#FFFFFF",
-  borderRadius: width * 0.04,
-  paddingVertical: height * 0.012,
-  paddingHorizontal: width * 0.04,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginLeft: width * 0.02,
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: width * 0.04,
+    paddingVertical: height * 0.012,
+    paddingHorizontal: width * 0.04,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginLeft: width * 0.02,
 
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.1,
-  shadowRadius: 6,
-  elevation: 5,
-},
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 5,
+  },
 
-porterLeftSection: {
-  flexDirection: "row",
-  alignItems: "center",
-  flex: 1,
-},
+  porterLeftSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
 
-porterIconCircle: {
-  width: width * 0.07,
-  height: width * 0.07,
-  borderRadius: width * 0.035,
-  backgroundColor: "#E8F5E9",
-  alignItems: "center",
-  justifyContent: "center",
-  marginRight: width * 0.03,
-},
+  porterIconCircle: {
+    width: width * 0.07,
+    height: width * 0.07,
+    borderRadius: width * 0.035,
+    backgroundColor: "#E8F5E9",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: width * 0.03,
+  },
 
-porterLabel: {
-  fontSize: width * 0.032,
-  color: "#777",
-},
+  porterLabel: {
+    fontSize: width * 0.032,
+    color: "#777",
+  },
 
-porterAddress: {
-  fontSize: width * 0.038,
-  fontWeight: "600",
-  color: "#222",
-  marginTop: 2,
-},
+  porterAddress: {
+    fontSize: width * 0.038,
+    fontWeight: "600",
+    color: "#222",
+    marginTop: 2,
+  },
 });
 
 export default HomeScreen;
