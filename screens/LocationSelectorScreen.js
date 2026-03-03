@@ -1201,9 +1201,19 @@ const LocationSelectorScreen = () => {
 
       setRouteCoordinates(points);
 
-      // ✅ Fit map to route
-      mapRef.current?.fitToCoordinates(points, {
-        edgePadding: { top: 80, right: 50, bottom: 80, left: 50 },
+      const markerCoords = [
+        {
+          latitude: pickup.latitude,
+          longitude: pickup.longitude,
+        },
+        ...validStops.map(s => ({
+          latitude: s.geometry.location.lat,
+          longitude: s.geometry.location.lng,
+        })),
+      ];
+
+      mapRef.current?.fitToCoordinates(markerCoords, {
+        edgePadding: { top: 100, right: 60, bottom: 120, left: 60 },
         animated: true,
       });
     } catch (err) {
@@ -2636,6 +2646,8 @@ const LocationSelectorScreen = () => {
               {(location || currentLocation) && (
                 <Marker
                   coordinate={location || currentLocation}
+                  anchor={{ x: 0.5, y: 1 }}
+                  centerOffset={{ x: 0, y: -10 }}
                   title="Pickup"
                 >
                   <Image
@@ -2646,17 +2658,21 @@ const LocationSelectorScreen = () => {
                 </Marker>
               )}
 
-              {/* ✅ Drop Markers (Red Icon + Number Badge) */}
-              {stopsDetails
-                .filter(d => d?.geometry?.location)
-                .map((d, i) => (
+              {/* ✅ Drop Markers (Red Icon + Optional Number Badge) */}
+              {(() => {
+                const validDrops = stopsDetails.filter(d => d?.geometry?.location);
+                const totalDrops = validDrops.length;
+
+                return validDrops.map((d, i) => (
                   <Marker
                     key={i}
                     coordinate={{
                       latitude: d.geometry.location.lat,
                       longitude: d.geometry.location.lng,
                     }}
-                    title={`Drop ${i + 1}`}
+                    anchor={{ x: 0.5, y: 1 }}
+                    centerOffset={{ x: 0, y: -10 }}
+                    title={totalDrops > 1 ? `Drop ${i + 1}` : "Drop"}
                   >
                     <View style={{ alignItems: "center" }}>
                       <Image
@@ -2664,25 +2680,30 @@ const LocationSelectorScreen = () => {
                         style={{ width: 40, height: 40 }}
                         resizeMode="contain"
                       />
-                      <View
-                        style={{
-                          position: "absolute",
-                          top: 4,
-                          backgroundColor: "#EC4D4A",
-                          width: 18,
-                          height: 18,
-                          borderRadius: 9,
-                          justifyContent: "center",
-                          alignItems: "center",
-                        }}
-                      >
-                        <Text style={{ color: "#fff", fontSize: 10, fontWeight: "bold" }}>
-                          {i + 1}
-                        </Text>
-                      </View>
+
+                      {totalDrops > 1 && (
+                        <View
+                          style={{
+                            position: "absolute",
+                            top: 4,
+                            backgroundColor: "#EC4D4A",
+                            width: 18,
+                            height: 18,
+                            borderRadius: 9,
+                            justifyContent: "center",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Text style={{ color: "#fff", fontSize: 10, fontWeight: "bold" }}>
+                            {i + 1}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </Marker>
-                ))}
+                ));
+              })()}
+
             </MapView>
           </View>
 

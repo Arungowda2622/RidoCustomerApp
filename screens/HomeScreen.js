@@ -543,50 +543,35 @@ const HomeScreen = () => {
           />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.locationCard}
-          onPress={() => navigation.navigate("LocationSelectorScreen", {
-            currentLocation,
-            currentAddress
-          })}
-        >
-          <View style={{ alignItems: "flex-start", width: "100%" }}>
-            <Text
-              style={[
-                styles.locationText,
-                { textAlign: "left", alignSelf: "flex-start" },
-              ]}
-            >
-              {" "}
-              Pick up Location
-            </Text>
-          </View>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              width: "100%",
-              marginTop: 2,
-            }}
-          >
-            <Ionicons
-              name="location-sharp"
-              size={width * 0.045}
-              color="green"
-              style={{ marginRight: width * 0.01 }}
-            />
-            <Text
-              style={[
-                styles.locationAddress,
-                { textAlign: "left", alignSelf: "flex-start", flex: 1 },
-              ]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {currentAddress || "Fetching location..."}
-            </Text>
-          </View>
-        </TouchableOpacity>
+       <TouchableOpacity
+  style={styles.porterLocationCard}
+  onPress={() =>
+    navigation.navigate("LocationSelectorScreen", {
+      currentLocation,
+      currentAddress,
+    })
+  }
+  activeOpacity={0.8}
+>
+  <View style={styles.porterLeftSection}>
+    <View style={styles.porterIconCircle}>
+      <Ionicons name="arrow-up" size={14} color="#2ECC71" />
+    </View>
+
+    <View style={{ flex: 1 }}>
+      <Text style={styles.porterLabel}>Pick up from</Text>
+      <Text
+        style={styles.porterAddress}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
+        {currentAddress || "Fetching location..."}
+      </Text>
+    </View>
+  </View>
+
+  <Ionicons name="chevron-forward" size={18} color="#888" />
+</TouchableOpacity>
       </View>
 
       {/* Scrollable Content */}
@@ -646,7 +631,7 @@ const HomeScreen = () => {
         {/* Image Section - starts immediately below vehicle cards */}
         <View style={styles.imageContainer}>
           <Image
-            source={require("../assets/image copy 2.png")}
+            source={require("../assets/homeImage.png")}
             style={styles.bottomImage}
             resizeMode="cover"
           />
@@ -832,12 +817,11 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   imageContainer: {
-    marginTop: -height * 0.02,
-    marginBottom: -height * 0.1,
+   
     width: "100%",
     height: height * 0.7,
     overflow: "hidden",
-    zIndex: -1,
+  
   },
   bottomImage: {
     width: "100%",
@@ -907,6 +891,51 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginRight: width * 0.01,
   },
+  porterLocationCard: {
+  flex: 1,
+  backgroundColor: "#FFFFFF",
+  borderRadius: width * 0.04,
+  paddingVertical: height * 0.012,
+  paddingHorizontal: width * 0.04,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginLeft: width * 0.02,
+
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.1,
+  shadowRadius: 6,
+  elevation: 5,
+},
+
+porterLeftSection: {
+  flexDirection: "row",
+  alignItems: "center",
+  flex: 1,
+},
+
+porterIconCircle: {
+  width: width * 0.07,
+  height: width * 0.07,
+  borderRadius: width * 0.035,
+  backgroundColor: "#E8F5E9",
+  alignItems: "center",
+  justifyContent: "center",
+  marginRight: width * 0.03,
+},
+
+porterLabel: {
+  fontSize: width * 0.032,
+  color: "#777",
+},
+
+porterAddress: {
+  fontSize: width * 0.038,
+  fontWeight: "600",
+  color: "#222",
+  marginTop: 2,
+},
 });
 
 export default HomeScreen;
